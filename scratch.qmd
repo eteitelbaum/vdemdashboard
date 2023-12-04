@@ -1,0 +1,58 @@
+---
+title: "scratch"
+format: html
+---
+
+```{r}
+vdem_data <- readr::read_rds("vdem_data.rds")
+
+data_filtered <- vdem_data[vdem_data$year == 1991, ]
+data_selected <- data_filtered[, c("country_name", "v2x_polyarchy", "geometry"), drop = FALSE]
+```
+
+Debug the line chart
+
+First, if there is no country selected, plot the global average. 
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(plotly)
+
+vdem_data <- read_rds("vdem_data.rds")
+
+# Convert sf object to a standard data frame so it works with dplyr
+non_spatial_data <- as.data.frame(vdem_data)
+non_spatial_data <- subset(vdem_data, select = -geometry)
+
+avg_data <- non_spatial_data |>
+  group_by(year) |>
+  summarize(mean = mean(v2x_polyarchy, na.rm = TRUE))
+
+ggplot(avg_data, aes(x = year, y = mean)) +
+  geom_line() +
+  labs(x = "Year", y = "Average Score", title = "Average Democracy Score Over Time") 
+```
+
+If there is a country selected, plot its trend.
+
+```{r}
+country_data <- vdem_data |>
+  filter(country_name == selected_country()) |>
+  select(year, !!sym(input$indicator))
+
+ggplot(country_data, aes(x = year, y = !!sym(input$indicator))) +
+  geom_line() +
+  labs(x = "Year", y = "Score", title = paste("Democracy Trend in", selected_country()))
+```
+
+
+```{r}
+unique(vdem_data$region)
+```
+
+```{r}
+```
+ 
+
