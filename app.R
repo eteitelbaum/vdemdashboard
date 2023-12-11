@@ -1,10 +1,12 @@
 ## Setup
 
+# load packages
 library(shiny)
 library(leaflet)
 library(dplyr)
 library(sf)
 library(plotly)
+library(viridis)
 
 source("modules.R")
 
@@ -39,7 +41,7 @@ region_choices = list(
 ## UI Function
 
 ui <- fluidPage(
-  titlePanel("Democracy Around the World!"),
+  titlePanel("Democracy Around the World"),
   
   # Define the rows and columns for the layout
   fluidRow(
@@ -52,9 +54,13 @@ ui <- fluidPage(
              radioButtons("regions", "Regions",
                           choices = region_choices,
                           selected = "Global"),
-             helpText("Use the checkbox above to explore democracy trends in a particular region. 
+             helpText(HTML("Use the checkbox above to explore democracy trends in a particular region. 
                   Click on the map to view the trends for an individual country. 
-                  All data from the Varieties of Democracy (V-Dem) dataset.")
+                  <br><br>
+                  <strong>Notes:</strong> All data from the Varieties of Democracy (V-Dem) dataset.
+                  Country boundaries are taken from the `rnaturalearth` package.Please note 
+                  that the author does not endorse any particular set of boundaries
+                  where borders are the subject of dispute."))
            )
     ),
     
@@ -62,11 +68,11 @@ ui <- fluidPage(
     column(9,
            fluidRow(
              column(6, countryMapModuleUI("map1")),
-             column(6, plotlyOutput("lineChart"))
+             column(6, plotlyLineChartModuleUI("linechart1"))
            ),
            fluidRow(
-             column(6, plotOutput("barChart")),
-             column(6, plotOutput("histogram"))
+             column(6, plotlyBarChartModuleUI("barchart1")),
+             column(6, plotlyScatterPlotModuleUI("scatterplot1"))
            )
     )
   )
@@ -76,14 +82,29 @@ ui <- fluidPage(
 
 server <- function(input, output) {
   
+  ## Region selection
+  
+  # Observe changes to region selection
+  observeEvent(input$regions, {
+    if (input$regions == "Global") {
+      # Reset the selected country and display global trend when "Global" is chosen
+      selected_country(NULL)
+    } else {
+      # Reset the selected country when any specific region is chosen
+      selected_country(NULL)
+    }
+  })
+  
+  ## Map 
+  
   # Reactive expression to filter the map data
   map_data <- reactive({
     filtered_map_data <- vdem_data[vdem_data$year == input$year, ]
     selected_map_data <- filtered_map_data[, c("country_name", input$indicator, "geometry"), drop = FALSE]
     return(selected_map_data)
-    }) 
+    })
   
-  # Create labels
+  # Create labels for map
   labels <- reactive({
     sprintf(
       "<strong>%s</strong><br/>%s: %g",
@@ -100,68 +121,153 @@ server <- function(input, output) {
   onClick <- function(click_data) {
     clicked_country <- click_data$id
     selected_country(clicked_country)
-  }
+    }
   
-  # Call leaflet module
+  # Call map module
   callModule(countryMapModule, "map1", 
              map_data = map_data, 
              labels = labels, 
              indicator = reactive(input$indicator),
              onClick = onClick)
 
-# Create line chart
+  ## Line Chart
   
-  output$lineChart <- renderPlotly({
-    if (input$regions == "Global" && is.null(selected_country())) {
+  # Reactive function to filter data for line chart
+  line_chart_data <- reactive({
+    
+    if (is.null(selected_country()) && input$regions == "Global") {
       # Global selected and no country selected, show global average
-      avg_data <- non_spatial_vdem |>
+      line_chart_data <- non_spatial_vdem |>
         group_by(year) |>
-        summarize(mean = mean(!!sym(input$indicator), na.rm = TRUE))
+        summarize(yvar = round(mean(!!sym(input$indicator), na.rm = TRUE), 3))
       
-      line_chart <- ggplot(avg_data, aes(x = year, y = mean)) +
-        geom_line() +
-        labs(x = "Year", 
-             y = "Score", 
-             title = paste("Global Trend in ", names(vars[which(vars == input$indicator)]))) +
-        theme_minimal()
+      title = "Global Trend" 
       
-      ggplotly(line_chart)
+    } else if (!is.null(selected_country())) {
+      # Country selected
+      line_chart_data <- non_spatial_vdem |>
+        filter(country_name == selected_country()) |>
+        select(year, yvar = !!sym(input$indicator))
       
-    } else if(input$regions != "Global" && is.null(selected_country())) {
+      title = selected_country() 
+      
+    } else {
       # Region selected, show trends for countries in region
-      region_data <- non_spatial_vdem |>
+      line_chart_data <- non_spatial_vdem |>
         filter(region == input$regions) |>
         group_by(year) |>
-        summarize(mean = mean(!!sym(input$indicator), na.rm = TRUE))
+        summarize(yvar = round(mean(!!sym(input$indicator), na.rm = TRUE), 3))
       
-      line_chart <- ggplot(region_data, aes(x = year, y = mean)) +
-        geom_line() +
-        labs(x = "Year",
-             y = "Score",
-             title = paste("Trend in", input$regions)) +
-        theme_minimal() +
-        scale_color_viridis_d(option = "magma")
-      
-      ggplotly(line_chart)
-      
+      title = input$regions
     }
-      else{
-      # Country selected, show its trend
-      country_data <- non_spatial_vdem |>
-        filter(country_name == selected_country()) |>
-        select(year, !!sym(input$indicator))
-      
-      ggplot(country_data, aes(x = year, y = !!sym(input$indicator))) +
-        geom_line() +
-        labs(x = "Year", 
-             y = "Score", 
-             title = paste("Trend in", selected_country())) +
-        theme_minimal()
-    }
-  })
-}
+    
+    list(data = line_chart_data, title = title)
+
+  })  
+
+  # Call plotly line chart module
+  callModule(plotlyLineChartModule, "linechart1",
+             data = reactive({ line_chart_data()$data }),
+             selected_year = reactive( input$year ),
+             title = reactive({ line_chart_data()$title }),
+             x_title = "Year",
+             y_title = reactive(names(vars[which(vars == input$indicator)]))
+  )
   
+  ## Bar Chart
+  
+  # Reactive function to filter data for bar chart
+  # Note: is some of this redundant to wrangling for line chart?
+  # Think about redoing this so that all scenarios include a highlight column
+  
+  bar_chart_data <- reactive({
+
+    if (is.null(selected_country()) && input$regions == "Global") {
+      # Global selected and no country selected, show global average
+      bar_chart_data <- non_spatial_vdem |>
+        filter(year == input$year, !is.na(region)) |>  # Exclude rows where region is NA
+        group_by(region) |>
+        summarize(xvar = round(mean(!!sym(input$indicator), na.rm = TRUE), 3)) |>
+        mutate(yvar = region) |>
+        arrange(xvar) 
+      
+    }  else if (!is.null(selected_country())) {
+      # Find the region of the selected country
+      ctry_from_region <- non_spatial_vdem |>
+        filter(country_name == selected_country()) |>
+        pull(region) |>
+        unique()
+      
+      # Filter data to include only countries from the selected region
+      bar_chart_data <- non_spatial_vdem |>
+        filter(region == ctry_from_region, 
+               year == input$year) |>
+        mutate(xvar = !!sym(input$indicator),
+               yvar = country_name,
+               # Add a column to highlight the selected country
+               highlight = country_name == selected_country()) |>
+        arrange(xvar)
+      
+    } else {
+      # Region selected, show values for countries in region
+      bar_chart_data <- non_spatial_vdem |>
+        filter(region == input$regions, 
+               year == input$year) |>
+        mutate(xvar = !!sym(input$indicator),
+               yvar = country_name) |>
+        arrange(xvar)
+    }
+
+    bar_chart_data
+
+  })
+  
+  # Call plotly bar chart module
+  
+  callModule(plotlyBarChartModule, "barchart1", 
+             data = reactive({ bar_chart_data() }), 
+             x_title = reactive(names(vars[which(vars == input$indicator)])),
+             highlight_col = reactive("highlight"),
+             color1 = magma(256)[128], #128
+             color2 = magma(256)[192]) #192
+
+## Scatter Plot
+
+# Think about redoing this so that all scenarios include a highlight column
+  
+# Reactive expression for scatter plot data
+scatter_plot_data <- reactive({
+  
+  # Filter by selected year, drop rows with NA region
+  filtered_plot_data <- non_spatial_vdem |>
+    filter(year == input$year)
+  
+  # Scenraio 1: Global view 
+  if (input$regions == "Global") {
+    plot_data <- filtered_plot_data |>
+      select(country_name, yvar = .data[[input$indicator]], xvar = e_gdppc, gdp_pc)
+
+  # Scenario 2: Region selected
+  } else {
+    plot_data <- filtered_plot_data |>
+      filter(region == input$regions) |>
+      select(country_name, yvar = .data[[input$indicator]], xvar = e_gdppc, gdp_pc)
+  }
+  
+  plot_data |> drop_na()
+})
+
+# Call plotly scatter plot module
+callModule(plotlyScatterPlotModule, 
+           "scatterplot1", 
+           data = scatter_plot_data, 
+           x_title = "GDP per capita",
+           y_title = reactive(names(vars[which(vars == input$indicator)])),
+           color1 = magma(256)[192], #192
+           color2 = magma(256)[128],
+           selected_country = selected_country)
+}
+
 ## Run the app
 shinyApp(ui = ui, server = server)
-
 

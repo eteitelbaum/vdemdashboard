@@ -52,7 +52,205 @@ ggplot(country_data, aes(x = year, y = !!sym(input$indicator))) +
 unique(vdem_data$region)
 ```
 
+
+Unused chunks
 ```{r}
+  onClick <- function(click_data) {
+    clicked_country <- click_data$id
+    # print(paste("Clicked on:", clicked_country))  # Debugging
+    # if (is.null(clicked_country) || (is.na(clicked_country))) {
+    #   selected_country(NULL)  
+    # } else {
+      selected_country(clicked_country)
+    }
+  #}
 ```
  
+
+```{r}
+    # Create line chart and plotlify it    
+    line_chart <- ggplot(chart_data, aes(x = year, y = yvar)) +
+  
+    geom_line(color = magma(256)[128]) +
+      labs(x = "Year",
+           y = "Score",
+           title = title) +
+      theme_minimal() 
+    
+    ggplotly(line_chart) 
+```
+
+
+```{r}
+   # Initialize a Plotly object
+    fig <- plot_ly()
+    
+    # Add a trace for your data
+    fig <- fig %>%
+      add_trace(
+        type = 'scatter',
+        mode = 'lines+markers',
+        x = chart_data$year,  
+        y = chart_data$yvar,  
+        line = list(color = magma(256)[128]),  # Set line color
+        marker = list(color = magma(256)[128]),  # Set marker color
+        hovertemplate = paste('<i>Year</i>: %{x}<br><i>Value</i>: %{y}<extra></extra>'),
+        showlegend = FALSE
+      )
+    
+    # Additional Plotly configurations can be added here if needed
+    
+    fig
+```
+
+
+```{r}
+vdem_data <- readr::read_rds("vdem_data.rds")
+
+non_spatial_vdem <- as.data.frame(vdem_data)
+non_spatial_vdem <- subset(non_spatial_vdem, select = -geometry)
+
+bar_chart_data <- non_spatial_vdem |>
+      filter(year == 2000,
+             country_name == "Angola") |>
+      tidyr::pivot_longer(cols = starts_with("v2x"),
+                          names_to = "indicator",
+                          values_to = "yvar") |>
+      mutate(xvar = reorder(indicator, -yvar)) |>
+      select(xvar, yvar)
+```
+
+```{r}
+vdem_data <- readr::read_rds("vdem_data.rds")
+
+non_spatial_vdem <- as.data.frame(vdem_data)
+non_spatial_vdem <- subset(non_spatial_vdem, select = -geometry)
+
+# Find the region of the selected country
+ctry_from_region <- non_spatial_vdem |>
+  filter(country_name == "Brazil") |>
+  pull(region) |>
+  unique()
+
+# Filter data to include only countries from the selected region
+bar_chart_data <- non_spatial_vdem |>
+  filter(region == ctry_from_region, year == 2000) |>
+  mutate(yvar = v2x_polyarchy,
+         xvar = reorder(country_name, -yvar),
+         # Add a column to highlight the selected country
+         highlight = country_name == "Brazil") 
+
+bar_chart <- ggplot(bar_chart_data, aes(x = yvar, y = xvar, fill = highlight)) +
+        geom_col() +
+        scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "steelblue"))
+
+bar_chart 
+
+# title = paste("Indicator Values in", selected_country())
+```
+
+```{r}
+vplotlyBarChartModule <- function(input, output, session, data, title = NULL, x = NULL, y = NULL, highlight_col = NULL, color1 = "red", color2 = "steelblue") {
+  output$barchart <- renderPlotly({
+    data <- data()  # Ensure data is available
+    highlight_col <- highlight_col()
+
+    # Check if title is provided
+    title_val <- if (!is.null(title)) title() else NULL
+        
+    # Check if highlight column name is provided and exists in the data
+    if (!is.null(highlight_col) && highlight_col %in% names(data)) {
+      bar_chart <- ggplot(data, aes_string(x = "yvar", y = "xvar", fill = highlight_col)) +
+        geom_col() +
+        scale_fill_manual(values = c("TRUE" = color1, "FALSE" = color2))
+    } else {
+      bar_chart <- ggplot(data, aes(x = yvar, y = xvar)) +
+        geom_col(fill = color2)  # Default fill color when highlight column is not present
+    }
+    
+    bar_chart <- bar_chart +
+      labs(title = title, x = x, y = y) +
+      theme_minimal() +
+      theme(axis.text.y = element_text(size = rel(0.7))) +
+      guides(fill = FALSE)
+    
+    fig <- ggplotly(bar_chart) 
+    
+    fig <- fig |>
+      style(hoverinfo = 'text', text = ~paste('Region:', xvar, '<br>Value:', yvar), traces = 1)
+    
+    fig <- fig |>
+      config(
+        displaylogo = FALSE,  # Remove the plotly logo
+        #displayModeBar = TRUE,  # Ensure that the mode bar is displayed
+        modeBarButtonsToRemove = list(
+          "zoomIn2d", "zoomOut2d", "autoScale2d", "lasso2d", "select2d", "zoom2d",
+          "pan2d", "hoverClosestCartesian", "hoverCompareCartesian"
+        )
+      )
+    
+    fig
+  })
+```
+
+```{r}
+# load data
+vdem_data <- readr::read_rds("vdem_data.rds") |>
+  st_set_crs("+proj=longlat +datum=WGS84")
+
+# make non-sf version of df
+non_spatial_vdem <- as.data.frame(vdem_data)
+non_spatial_vdem <- subset(non_spatial_vdem, select = -geometry)
+```
+
+```{r}
+# take the non-spatial data and count the number of countries in each region
+region_counts <- non_spatial_vdem |>
+  filter(year == 2010) |>
+  group_by(region) |>
+  summarise(n = n()) |>
+  arrange(desc(n))
+
+region_counts
+```
+
+```{r}
+# list out the countries with NA for region
+
+non_spatial_vdem |>
+  filter(is.na(region)) |>
+  pull(country_name) |>
+  unique()
+```
+
+```{r}
+# list the countries with missing values for v2x_polyarchy
+non_spatial_vdem |>
+  filter(is.na(v2x_polyarchy)) |>
+  pull(country_name) |>
+  unique()
+```
+
+```{r}
+# list country codes of countries with missing values for regio
+non_spatial_vdem |>
+  filter(is.na(region)) |>
+  pull(iso3c) |>
+  unique()
+```
+
+```{r}
+# look for negative or zero values in e_gdppc variable
+
+non_spatial_vdem |>
+  filter(e_gdppc <= 0)
+```
+
+
+```{r}
+str(non_spatial_vdem)
+```
+
+```{r}
+```
 

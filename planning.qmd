@@ -50,7 +50,8 @@ vdem_df <- vdem |>
     v2x_gender,
     e_gdppc,
     region = e_regionpol_6C) |>
-    mutate(gdp_pc = scales::dollar_format()(e_gdppc*1000)) |>
+    mutate(gdp_pc = scales::dollar_format()(e_gdppc*1000),
+           e_gdppc = e_gdppc*1000) |>
     mutate(
     region = case_match(region,
                      1 ~ "Eastern Europe", 
@@ -87,14 +88,40 @@ world <- ne_countries(scale = "medium", returnclass = "sf") |>
 
 # Expand vdem_df to include all country-year combinations
 years <- seq(min(vdem_df$year), max(vdem_df$year))
-
 countries <- unique(world$iso3c)
 
 expanded_vdem_df <- expand.grid(iso3c = countries, year = years) |> 
   left_join(vdem_df, by = c("iso3c", "year"))
 
-# Join with world boundaries
-vdem_data <- left_join(world, expanded_vdem_df, by = "iso3c") 
+# Join with world boundaries and abbreviate country names
+vdem_data <- left_join(world, expanded_vdem_df, by = "iso3c") |>
+  mutate(country_name = if_else(iso3c == "GRL", "Greenland", country_name)) |>
+  mutate(country_name = if_else(iso3c == "SSD", "South Sudan", country_name)) |>
+  mutate(country_name = if_else(country_name == "North Macedonia", "N. Macedonia", country_name)) |> 
+  mutate(country_name = if_else(country_name == "Bosnia and Herzegovina", "BiH", country_name)) |>
+  mutate(country_name = if_else(country_name == "Dominican Republic", "Dominican Rep.", country_name)) |>
+  mutate(country_name = if_else(country_name == "Trinidad and Tobago", "T&T", country_name)) |>
+  mutate(country_name = if_else(country_name == "United Arab Emirates", "UAE", country_name)) |>
+  mutate(country_name = if_else(country_name == "Palestine/Gaza", "Palestine", country_name)) |>
+  mutate(country_name = if_else(country_name == "Equitorial Guinea", "Eq. Guinea", country_name)) |>
+  mutate(country_name = if_else(country_name == "Republic of the Congo", "Congo-Brazzaville", country_name)) |>
+  mutate(country_name = if_else(country_name == "Democratic Republic of the Congo", "DRC", country_name)) |>
+  mutate(country_name = if_else(country_name == "Central African Republic", "CAR", country_name)) |>
+  mutate(country_name = if_else(country_name == "Sao Tome and Principe", "STP", country_name)) |>
+  mutate(country_name = if_else(country_name == "United States of America", "United States", country_name)) |>
+  mutate(country_name = if_else(country_name == "Burma/Myanmar", "Myanmar", country_name)) |>
+  mutate(country_name = if_else(country_name == "Papua New Guinea", "PNG", country_name)) 
+  
+# Replace missing e_gdppc and gdp_pc values with previous year's values
+# Note: could try solving this issue by mergin WB data instead
+vdem_data <- vdem_data |> 
+  group_by(iso3c) |> 
+  mutate(
+    e_gdppc = if (any(!is.na(e_gdppc))) zoo::na.locf(e_gdppc, na.rm = FALSE) else e_gdppc,
+    gdp_pc = if (any(!is.na(gdp_pc))) zoo::na.locf(gdp_pc, na.rm = FALSE) else gdp_pc
+  ) |> 
+  ungroup()
+
 
 glimpse(vdem_data)
 
@@ -306,4 +333,23 @@ Later version of the leaflet mapp code
       )
   })
 ```
+
+
+```{r}
+library(plotly)
+
+# Aggregate data: Calculate average mpg for each number of cylinders
+agg_data <- aggregate(mpg ~ cyl, data = mtcars, mean)
+
+# Create bar chart
+fig <- plot_ly(data = agg_data, x = ~cyl, y = ~mpg, type = 'bar') %>%
+  layout(title = NULL,
+         xaxis = list(title = " "),
+         yaxis = list(title = " "))
+
+# Display the plot
+fig
+
+```
+
 
