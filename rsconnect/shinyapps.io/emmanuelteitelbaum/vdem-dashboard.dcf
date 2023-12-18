@@ -1,0 +1,13 @@
+name: vdem-dashboard
+title: vdem-dashboard
+username: emmanuelteitelbaum
+account: emmanuelteitelbaum
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 10772698
+bundleId: 8063096
+url: https://emmanuelteitelbaum.shinyapps.io/vdem-dashboard/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: planning.qmd|scratch.qmd

@@ -1,4 +1,4 @@
-## Map Modules
+## Map Modules ----
 
 # leaflet country map UI
 countryMapModuleUI <- function(id) {
@@ -45,7 +45,7 @@ countryMapModule <- function(input, output, session, map_data, labels, indicator
   })
 }
 
-## Line Chart Modules
+## Line Chart Modules ----
 
 # plotly line chart UI
 plotlyLineChartModuleUI <- function(id) {
@@ -118,7 +118,7 @@ plotlyLineChartModule <- function(input, output, session, data, selected_year = 
   })
 }  
 
-## Bar Chart Modules
+## Bar Chart Modules ----
 
 # plotly bar chart UI
 plotlyBarChartModuleUI <- function(id) {
@@ -147,7 +147,7 @@ plotlyBarChartModule <- function(input,
     highlight_col_val <- if (!is.null(highlight_col) && highlight_col() %in% names(data)) highlight_col() else NULL
     
     # Define colors based on the highlight column
-    # Note: let's come back later and change this to dplyr
+    # Note: let's come back later and maybe change this to dplyr
     colors <- if (!is.null(highlight_col_val)) {
       ifelse(data[[highlight_col_val]], color1, color2)
     } else {
@@ -185,7 +185,7 @@ plotlyBarChartModule <- function(input,
   })
 }
 
-## Scatter Plot Modules
+## Scatter Plot Modules---- 
 
 # plotly scatter plot UI
 plotlyScatterPlotModuleUI <- function(id) {
@@ -218,30 +218,46 @@ plotlyScatterPlotModule <- function(
     y_title <- y_title()
     
     # # Fit a loess model
-    # loess_fit <- loess(yvar ~ xvar, data = data)
+    # lm_fit <- lm(yvar ~ xvar, data = data)
     # 
     # # Predict values using the loess model
-    # data$y_pred <- predict(loess_fit)
+    # data$y_pred <- predict(lm_fit)
     # 
     # # Calculate 95% confidence interval
-    # predictions <- predict(loess_fit, se = TRUE)
+    # predictions <- predict(lm_fit, se = TRUE)
     # ci <- 1.96 * predictions$se.fit
     # data$y_upper <- data$y_pred + ci
     # data$y_lower <- data$y_pred - ci
     # 
-    # print(data)
+    # #print(data)
+    # 
+    #   fig <- plot_ly(data = data, x = ~xvar,
+    #                  text = ~paste("Country:", country_name, "<br>", 
+    #                                x_title, ":", gdp_pc, "<br>", 
+    #                                y_title, ":", yvar),
+    #                  hoverinfo = 'text') |>
+    #   add_markers(y = ~yvar, 
+    #               marker = list(color = color1),
+    #               showlegend = FALSE) |>
+    #   add_lines(y = ~y_pred, 
+    #             line = list(color = color2),
+    #             showlegend = FALSE) |>
+    #   add_ribbons(ymin = ~y_lower, ymax = ~y_upper, x = ~xvar, 
+    #             line = list(color = 'transparent'), 
+    #             fillcolor = 'rgba(173, 216, 230, 0.2)', 
+    #             showlegend = FALSE)
     
     # Create the initial scatter plot
-    fig <- plot_ly(data = data, 
-                   x = ~xvar, y = ~yvar, 
-                   type = 'scatter', 
+    fig <- plot_ly(data = data,
+                   x = ~xvar, y = ~yvar,
+                   type = 'scatter',
                    mode = 'markers',
                    marker = list(color = color1),
-                   text = ~paste("Country:", country_name, "<br>", 
-                                 x_title, ":", gdp_pc, "<br>", 
+                   text = ~paste("Country:", country_name, "<br>",
+                                 x_title, ":", gdp_pc, "<br>",
                                  y_title, ":", yvar),
                    hoverinfo = 'text')
-    
+
     # # Add the loess curve to the plot
     # fig <- fig |>
     #   add_lines(
