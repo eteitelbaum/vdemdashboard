@@ -1,0 +1,358 @@
+---
+title: "Data Wrangling"
+format: html
+---
+
+## Overview
+
+The basic plan is to have a dashboard with a clickable choropleth map, a colum chart and a line chart. Initially, the app will display a map that displays the selected indicator, a column chart with regional averages for that indicator, and a line chart showing the global average for that indicator over time. 
+
+The user can then select a different indicator and the column chart and the line chart with the global average will adjust to reflect the new indicator. 
+
+The user can also select regions in which case the regional averages will turn into averages for each country in the region.
+
+Then, there will be sliders that will adjust the time period covered in the line chart, bar chart and scatter plot (if included).
+
+Finally the user can click on individual countries on the map. When the user clicks on a country the line chart will update to reflect the trend for that country and the bar chart will have one bar providing the average value over the time period for that country. The user can then either click to select a new country or shift+click to add countries to the line chart and the bar chart. 
+
+I am on the fence about the idea of also including a scatterplot that would show the selected indicator on the y-axis and GDP growth on the x-axis. 
+
+The clickable map can be made with leaflet and rnaturalearth (according to ChatGPT). 
+
+A nice touch might be a table that users could use to download the data from the dashboard. 
+
+Would want to use `shinydashboard` in addition to basic `shiny`. 
+
+For hosting, need to understand Shiny Server and Shiny Proxy. 
+
+## Data
+
+This is going to be panel data with some of the vdem data for all of the countries and (all?) of the years. But let's start small.
+
+```{r}
+library(vdemdata)
+library(dplyr)
+library(readr)
+library(countrycode)
+
+vdem_df <- vdem |>
+  filter(year >= 1990) |>
+  select(
+    country_name,
+    country_id,
+    year, 
+    v2x_polyarchy,
+    v2x_libdem,
+    v2x_partipdem,
+    v2x_delibdem,
+    v2x_egaldem,
+    v2x_civlib,
+    v2x_rule,
+    v2xnp_client,
+    v2xnp_regcorr,
+    v2x_gender,
+    e_gdppc,
+    region = e_regionpol_6C) |>
+    mutate(gdp_pc = scales::dollar_format()(e_gdppc*1000),
+           e_gdppc = e_gdppc*1000) |>
+    mutate(
+    region = case_match(region,
+                     1 ~ "Eastern Europe", 
+                     2 ~ "Latin America",  
+                     3 ~ "Middle East",   
+                     4 ~ "Africa", 
+                     5 ~ "The West", 
+                     6 ~ "Asia")
+  ) |>
+  # add iso3c code
+  mutate(iso3c = countrycode(sourcevar = country_id, 
+        origin = "vdem",         
+        destination = "wb"))  |> 
+  relocate(iso3c, .after = country_id) 
+
+glimpse(vdem_df)
+
+#write_rds(vdem_tbl, "vdem_trends.rds")
+```
+
+Then we need to merge these data with country shapes from `rnaturalearth`. 
+
+```{r}
+library(rnaturalearth)
+library(sf)
+library(dplyr)
+library(tidyr)
+
+# Load world boundaries
+world <- ne_countries(scale = "medium", returnclass = "sf") |> 
+  select(iso_a3, geometry) |> 
+  filter(iso_a3 != "ATA") |>
+  rename(iso3c = iso_a3)
+
+# Expand vdem_df to include all country-year combinations
+years <- seq(min(vdem_df$year), max(vdem_df$year))
+countries <- unique(world$iso3c)
+
+expanded_vdem_df <- expand.grid(iso3c = countries, year = years) |> 
+  left_join(vdem_df, by = c("iso3c", "year"))
+
+# Join with world boundaries and abbreviate country names
+vdem_data <- left_join(world, expanded_vdem_df, by = "iso3c") |>
+  mutate(country_name = if_else(iso3c == "GRL", "Greenland", country_name)) |>
+  mutate(country_name = if_else(iso3c == "SSD", "South Sudan", country_name)) |>
+  mutate(country_name = if_else(country_name == "North Macedonia", "N. Macedonia", country_name)) |> 
+  mutate(country_name = if_else(country_name == "Bosnia and Herzegovina", "BiH", country_name)) |>
+  mutate(country_name = if_else(country_name == "Dominican Republic", "Dominican Rep.", country_name)) |>
+  mutate(country_name = if_else(country_name == "Trinidad and Tobago", "T&T", country_name)) |>
+  mutate(country_name = if_else(country_name == "United Arab Emirates", "UAE", country_name)) |>
+  mutate(country_name = if_else(country_name == "Palestine/Gaza", "Palestine", country_name)) |>
+  mutate(country_name = if_else(country_name == "Equitorial Guinea", "Eq. Guinea", country_name)) |>
+  mutate(country_name = if_else(country_name == "Republic of the Congo", "Congo-Brazzaville", country_name)) |>
+  mutate(country_name = if_else(country_name == "Democratic Republic of the Congo", "DRC", country_name)) |>
+  mutate(country_name = if_else(country_name == "Central African Republic", "CAR", country_name)) |>
+  mutate(country_name = if_else(country_name == "Sao Tome and Principe", "STP", country_name)) |>
+  mutate(country_name = if_else(country_name == "United States of America", "United States", country_name)) |>
+  mutate(country_name = if_else(country_name == "Burma/Myanmar", "Myanmar", country_name)) |>
+  mutate(country_name = if_else(country_name == "Papua New Guinea", "PNG", country_name)) 
+  
+# Replace missing e_gdppc and gdp_pc values with previous year's values
+# Note: could try solving this issue by mergin WB data instead
+vdem_data <- vdem_data |> 
+  group_by(iso3c) |> 
+  mutate(
+    e_gdppc = if (any(!is.na(e_gdppc))) zoo::na.locf(e_gdppc, na.rm = FALSE) else e_gdppc,
+    gdp_pc = if (any(!is.na(gdp_pc))) zoo::na.locf(gdp_pc, na.rm = FALSE) else gdp_pc
+  ) |> 
+  ungroup()
+
+
+glimpse(vdem_data)
+
+write_rds(vdem_data, "vdem_data.rds")
+```
+## Map the Data
+
+First try a simple map with the `ggplot2` package.
+
+```{r}
+library(ggplot2)
+library(ggthemes)
+
+vdem_data |>
+  filter(year == 1991) |>
+  ggplot() +
+    geom_sf(aes(fill = v2x_polyarchy)) +
+    scale_fill_viridis_c() +
+    theme_map()
+```
+
+Now try a map with `leaflet`.
+
+```{r}
+library(leaflet)
+
+# Filter the data for the year 1991
+
+vdem_map_1991 <- vdem_data |> filter(year == 1991)
+
+# Create labels
+
+labels <- sprintf(
+  "<strong>%s</strong><br/>Polyarchy: %g ",
+  vdem_map_1991$country_name, vdem_map_1991$v2x_polyarchy
+) |> lapply(htmltools::HTML)
+
+# Create the Leaflet map
+leaflet(vdem_map_1991, 
+  options = leafletOptions(
+    minZoom = 1,
+    maxBounds = list(c(-90, -180), c(90, 180)),
+    worldCopyJump = TRUE
+    )
+  ) |>
+  addProviderTiles(providers$Esri.WorldGrayCanvas) |> 
+  addPolygons(
+    fillColor = ~colorNumeric("viridis", v2x_polyarchy)(v2x_polyarchy),
+    weight = 1,
+    opacity = 1,
+    color = "black",
+    dashArray = "1",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 2,
+      color = "#666",
+      dashArray = "0",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "13px",
+      direction = "auto")
+  ) |>
+  addLegend(
+    "bottomright",
+    pal = colorNumeric("viridis", vdem_map_1991$v2x_polyarchy),
+    values = ~v2x_polyarchy,
+    title = NULL,
+    opacity = 0.7
+  ) 
+```
+
+## Setup
+
+```{r}
+vars <- c("Electoral Democracy" = "v2x_polyarchy",
+          "Liberal Democracy" = "v2x_libdem",
+          "Participatory Democracy" = "v2x_partipdem",
+          "Civil Liberties" = "v2x_civlib",
+          "Clientelism" = "v2xnp_client",
+          "Corruption" = "v2xnp_regcorr",
+          "Women's Empowerment" = "v2x_gender",
+          "Wealth" = "gdp_pc")
+```
+
+## User Interface (UI)
+
+```{r}
+ui <- fluidPage(
+  titlePanel("Democracy Around the World!"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("year", "Year", min = 1990, max = vedem_data$max(year), value = 2010),
+      selectInput("indicator", "Indicator", choices = vars),
+    ),
+    mainPanel(
+      leafletOutput("map")
+    )
+  )
+)
+```
+
+
+## Server Function
+
+```{r}
+server <- function(input, output) {
+
+  # Reactive expression to filter the data
+  filtered_data <- reactive({
+    vdem_data |>
+      filter(
+        year == input$year, 
+        indicator == input$indicator)
+  })
+  
+  # Extract indicator name
+  indicator_name <- names(vars)[which(vars == input$indicator)]
+  
+  # Create labels
+  
+  labels <- sprintf(
+  "<strong>%s</strong><br/>%i: %g",
+  filtered_data()$country_name, indicator_name(), filtered_data()$indicator
+) |> lapply(htmltools::HTML)
+
+  # Render the Leaflet map
+  output$map <- output$map <- renderLeaflet({
+  leaflet(filtered_data(), 
+          options = leafletOptions(
+            minZoom = 1,
+            maxBounds = list(c(-90, -180), c(90, 180)),
+            worldCopyJump = TRUE
+          )
+        ) |>
+    addProviderTiles(providers$Esri.WorldGrayCanvas) |> 
+    addPolygons(
+      fillColor = ~colorNumeric("viridis", filtered_data()$indicator)(filtered_data$indicator),
+        weight = 1,
+        opacity = 1,
+        color = "black",
+        dashArray = "1",
+        fillOpacity = 0.7,
+        highlightOptions = highlightOptions(
+          weight = 2,
+          color = "#666",
+          dashArray = "0",
+          fillOpacity = 0.7,
+          bringToFront = TRUE),
+        label = labels,
+        labelOptions = labelOptions(
+          style = list("font-weight" = "normal", padding = "3px 8px"),
+          textsize = "13px",
+          direction = "auto")
+      ) |>
+    addLegend(
+      "bottomright",
+      pal = colorNumeric("viridis", filtered_data$indicator),
+      values = ~v2x_polyarchy,
+      title = NULL,
+      opacity = 0.7
+    )
+  })
+}
+```
+
+
+Later version of the leaflet mapp code
+
+```{r}
+  # Render the Leaflet map
+  output$map <- renderLeaflet({
+    leaflet(map_data(),
+            options = leafletOptions(
+              minZoom = 1,
+              maxBounds = list(c(-90, -180), c(90, 180)),
+              worldCopyJump = TRUE
+            )
+    ) |>
+      addProviderTiles(providers$Esri.WorldGrayCanvas) |>
+      addPolygons(
+        fillColor = ~colorNumeric("magma",
+        map_data()[[input$indicator]])(map_data()[[input$indicator]]),
+        weight = 1,
+        opacity = 1,
+        color = "black",
+        dashArray = "1",
+        fillOpacity = 0.7,
+        highlightOptions = highlightOptions(
+          weight = 2,
+          color = "#666",
+          dashArray = "0",
+          fillOpacity = 0.7,
+          bringToFront = TRUE),
+        label = labels(),
+        labelOptions = labelOptions(
+          style = list("font-weight" = "normal", padding = "3px 8px"),
+          textsize = "13px",
+          direction = "auto")
+      ) |>
+      addLegend(
+        "bottomleft",
+        pal = colorNumeric("magma", map_data()[[input$indicator]]),
+        values = ~map_data()[[input$indicator]],
+        title = NULL,
+        opacity = 0.7
+      )
+  })
+```
+
+
+```{r}
+library(plotly)
+
+# Aggregate data: Calculate average mpg for each number of cylinders
+agg_data <- aggregate(mpg ~ cyl, data = mtcars, mean)
+
+# Create bar chart
+fig <- plot_ly(data = agg_data, x = ~cyl, y = ~mpg, type = 'bar') %>%
+  layout(title = NULL,
+         xaxis = list(title = " "),
+         yaxis = list(title = " "))
+
+# Display the plot
+fig
+
+```
+
+
