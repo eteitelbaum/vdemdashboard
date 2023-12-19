@@ -26,13 +26,3 @@ This project is licensed under the Creative Commons Attribution-ShareAlike 4.0 I
 ## Acknowledgements
 
 Special thanks to the V-Dem Project for providing the data and to Natural Earth for the map data.
-
----
-
-### Additional Notes:
-
-- **Customize and Expand:** Feel free to add any additional sections you think are relevant, like installation instructions, how to contribute, contact information, screenshots of the app, or a section on future improvements.
-- **Markdown Formatting:** Use Markdown formatting to make your README more readable and organized. For example, you can use headers, bullet points, hyperlinks, and italic or bold text for emphasis.
-- **Keep It Updated:** Regularly update your README to reflect any significant changes or updates to your app.
-
-This template provides a starting point, but you should tailor it to best reflect the specifics and strengths of your app.
