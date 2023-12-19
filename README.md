@@ -16,6 +16,10 @@ The V-Dem Democracy Indicators Visualization App is an interactive tool designed
 3. **Pick a Region:** Choose a specific region or opt for a global view.
 4. **Explore the Data:** Click on the map for country-specific trends or view the charts for broader analysis.
 
+## Running the Code
+
+Before running the code, you will need to wrangle the data. Open the `data-wrangling.md` script and run the code chunks to create the necessary vdem_data.rds file.
+
 ## Data Source
 
 The data is sourced from the [Varieties of Democracy (V-Dem) Project](https://www.v-dem.net/), an approach to understanding and measuring democracy. Map data are from the [rnaturalearth])http://ropensci.github.io/rnaturalearth/) package.
