@@ -22,7 +22,7 @@ Before running the code, you will need to wrangle the data. Open the `data-wrang
 
 ## Data Source
 
-The data is sourced from the [Varieties of Democracy (V-Dem) Project](https://www.v-dem.net/), an approach to understanding and measuring democracy. Map data are from the [rnaturalearth])http://ropensci.github.io/rnaturalearth/) package.
+The data is sourced from the [Varieties of Democracy (V-Dem) Project](https://www.v-dem.net/), an approach to understanding and measuring democracy. Map data are from the [rnaturalearth](http://ropensci.github.io/rnaturalearth/) package.
 
 ## License
 This project is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License - see the [LICENSE](LICENSE.md) file for details.
