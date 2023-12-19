@@ -2,3 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
+vdem_data.rds
+planning.qmd
+data-wrangling.qmd
+rsconnect/
