@@ -18,7 +18,7 @@ The V-Dem Democracy Indicators Visualization App is an interactive tool designed
 
 ## Running the Code
 
-Before running the code, you will need to wrangle the data. Open the `data-wrangling.md` script and run the code chunks to create the necessary vdem_data.rds file.
+Before running the code, you will need to wrangle the data. Open the `data-wrangling.qmd` script and run the code chunks to create the necessary vdem_data.rds file.
 
 ## Data Source
 
