@@ -54,7 +54,7 @@ plotlyLineChartModuleUI <- function(id) {
 }
 
 # plotly line chart server
-plotlyLineChartModule <- function(input, output, session, data, selected_year = NULL, title = NULL, x_title = "", y_title = "") {
+plotlyLineChartModule <- function(input, output, session, data, selected_year = NULL, title = NULL, x_title = "", y_title = "", y_range) {
   
   output$linechart <- renderPlotly({
     data <- data()  
@@ -62,6 +62,7 @@ plotlyLineChartModule <- function(input, output, session, data, selected_year = 
     selected_year <- selected_year()
     x_title <- x_title
     y_title <- y_title()
+    y_range <- y_range()
   
   # Initialize a Plotly object
   fig <- plot_ly()
@@ -100,7 +101,7 @@ plotlyLineChartModule <- function(input, output, session, data, selected_year = 
     layout(
       title = title,  
       xaxis = list(title = x_title),  
-      yaxis = list(title = y_title)  
+      yaxis = c(list(title = y_title), y_range()) 
     )
   
   # Customize the toolbar

@@ -82,13 +82,23 @@ server <- function(input, output) {
 
   })  
 
+  # Determine y-axis range based on checkbox input
+  y_axis_range <- reactive({
+    if (input$fixed_axis) {
+      return(list(range = c(0, 1)))
+    } else {
+      return(list(autorange = TRUE))
+    }
+  })
+  
   # Call plotly line chart module
   callModule(plotlyLineChartModule, "linechart1",
              data = reactive({ line_chart_data()$data }),
              selected_year = reactive( input$year ),
              title = reactive({ line_chart_data()$title }),
              x_title = "Year",
-             y_title = reactive(names(vars[which(vars == input$indicator)]))
+             y_title = reactive(names(vars[which(vars == input$indicator)])), 
+             y_range = reactive({ y_axis_range() })
   )
   
   ## Bar Chart ----

@@ -7,6 +7,7 @@ header <-  dashboardHeader(
 # Define dashboard sidebar
 sidebar <- dashboardSidebar(
   width = 300,
+  div(style = "margin: 10px; color: #FFFFFF; font-weight: lighter",
   sidebarMenu(
     menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard")),
     menuItem("About the Data", tabName = "about-the-data", icon = icon("book"))
@@ -17,9 +18,10 @@ sidebar <- dashboardSidebar(
   radioButtons("regions", "Regions",
                choices = region_choices,
                selected = "Global"),
-  div(style = "margin: 10px; color: #FFFFFF; font-weight: lighter", 
-  HTML("Use the checkbox above to explore democracy trends in a particular region.
-                  Click on the map to view the trends for an individual country.")
+  HTML("Use the radio buttons above to explore democracy trends in a particular region.
+                  Click on the map to view the trends for an individual country."),
+  checkboxInput("fixed_axis", "Fixed Y-Axis for Line Chart", value = FALSE),
+  HTML("The dynamic y-axis can sometimes make it difficult to compare trends across countries. Check the box above to fix the y-axis for the line chart."),
   )
 )
 
